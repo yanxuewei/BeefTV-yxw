@@ -8,7 +8,10 @@ ARG BUILD_VERSION
 ENV CANVAS_BUILD_VERSION=${BUILD_VERSION}
 COPY web/package.json web/bun.lock ./
 COPY web/patches ./patches
-RUN --mount=type=cache,target=/root/.bun/install/cache bun install --frozen-lockfile --cache-dir=/root/.bun/install/cache
+# 不要把 bun 缓存放到 BuildKit cache mount：共享缓存一旦残留 0 字节的包文件，
+# bun 会直接复用坏内容，产出的 node_modules 出现空 package.json 和缺包，vite 构建随之失败。
+RUN bun install --frozen-lockfile --cache-dir=/root/.bun/install/cache \
+	&& rm -rf /root/.bun/install/cache
 COPY VERSION /app/VERSION
 COPY CHANGELOG.md /app/CHANGELOG.md
 COPY README.md /app/README.md
