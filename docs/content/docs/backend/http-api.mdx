@@ -221,6 +221,11 @@ MiniMax speech 的 OpenAI 音频兼容目录通过 `audioOptions` 提供官方�
 `operation_id_conflict`，不会自行挑选其中一个身份。外部 MCP/CLI 的能力描述保留 `operationId` 作为稳定幂等键；
 内置助手宿主自己生成幂等键，因此它看到的能力描述不含该字段。
 
+`/ops` 的身份只认四种来源：owner 凭据、已登记客户端、受信任桌面界面、内置助手宿主。服务端形态
+（`cmd/server`，没有桌面壳凭据）下，带 `Origin` 或 `Sec-Fetch-Site: same-origin` 的本机同源请求按工作区
+本机用户处理，结果为 `caller=manual`；不带这两个头的本机进程仍须 owner 凭据或已登记客户端，不会仅凭回环
+地址获得写权限。这条放行取代了原先手工打开 `BEEFTV_UI_BOOTSTRAP` 的签发方式。
+
 ### 助手回合归属
 
 内置助手宿主调用 `/ops/:op` 时出示自己的宿主凭据 `X-Beeftv-Agent-Token`（由后端注入宿主进程，页面与
@@ -238,7 +243,7 @@ MiniMax speech 的 OpenAI 音频兼容目录通过 `audioOptions` 提供官方�
 | 端点 | 说明 |
 | --- | --- |
 | `GET /assistant/status` | 免身份的宿主状态查询（不含任何凭据）；未就绪时返回明确原因而不是空回复 |
-| `POST /assistant/ui-session` | 签发短期限 UI 会话凭据；需本机同源，并且能出示 owner 凭据（或显式本地引导开关） |
+| `POST /assistant/ui-session` | 签发短期限 UI 会话凭据；需本机同源，并能出示 owner 凭据或桌面壳信任。服务端形态下同源浏览器请求本身即视为工作区本机用户 |
 | `POST /assistant/chat` | NDJSON 流式对话：先用 `session` 行返回实际 `sessionId`，再发 `text_snapshot`（`text` 替换本轮已显示文字）、`reasoning_snapshot`（`segments: [{id,text,status}]` 整段替换本轮已收到的可读思考，`status` 为 `streaming` 或 `done`；从没有可读思考时不发这一行，已经显示过又变空时发空数组让页面撤掉旧内容）、`plan`（`plan` 为最新制作计划，`null` 表示清空）与 `turn_end` 结算；断流或 `observer_error` 不表示结算。`turn_end`、历史回合与进行中的回合（宿主取得初始投影后）总是带同形 `reasoning`，没有可读思考时是空数组，旧记录可能没有这个字段。思考只含模型已返回的普通文本、块身份与阶段，不含签名、redacted 载荷、工具参数与上游原文。旧 JSONL 会话交接后重复请求复用其 Durable 接续会话，界面应立即保存 `sessionId` 用于恢复。可带 `references: [{kind,id}]` 追加已校验的素材/画布引用；宿主凭据与模型密钥由后端注入，页面不接触 |
 | `POST /assistant/cancel` | 取消指定画布正在进行的回合 |
 | `GET/PUT /assistant/host/config`、`POST /assistant/host/start|stop` | 宿主生命周期：需 owner 凭据 + 本机同源；启动命令只取本机配置，绝不接受请求体传入的可执行命令 |

@@ -179,7 +179,36 @@ func resolveCaller(c *gin.Context, svc *app.Service, clients *agentops.ClientReg
 	if trustedDesktopUI(c) {
 		return agentops.Caller{Kind: agentops.CallerManual}, "desktop-ui", nil
 	}
+	if localBrowserUI(c) {
+		return agentops.Caller{Kind: agentops.CallerManual}, "local-ui", nil
+	}
 	return agentops.Caller{}, "", errUnidentified
+}
+
+// localBrowserUI 判定「没有桌面壳时，由浏览器工作台自身发起的本机同源请求」。
+// 浏览器会带同源 Origin 或 Sec-Fetch-Site: same-origin；不带这两个头的本机进程（CLI、
+// 脚本、测试）仍需 owner 凭据或已登记客户端，因此这条放行不会让本地命令行进程获得写权限。
+func localBrowserUI(c *gin.Context) bool {
+	if !browserSameOriginUI(c) {
+		return false
+	}
+	dependencies, ok := runtimeDependencies(c)
+	if !ok || dependencies.DesktopTrust != nil {
+		return false
+	}
+	return isLoopbackRequest(c.Request)
+}
+
+// browserSameOriginUI 只区分「浏览器页面自身」与「其它本机进程」。本地进程同样能伪造
+// 这两个头，所以它不构成安全边界，真正的准入仍由 isLoopbackRequest 与 owner/客户端凭据完成。
+func browserSameOriginUI(c *gin.Context) bool {
+	if c == nil || c.Request == nil {
+		return false
+	}
+	if strings.TrimSpace(c.GetHeader("Origin")) != "" {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(c.GetHeader("Sec-Fetch-Site")), "same-origin")
 }
 
 func trustedDesktopUI(c *gin.Context) bool {

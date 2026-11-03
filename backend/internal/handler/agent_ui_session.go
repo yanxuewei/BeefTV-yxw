@@ -108,7 +108,10 @@ func RegisterAgentUISessionRoutes(r gin.IRouter, svc *app.Service, ui *uiSession
 		devBootstrap := strings.TrimSpace(os.Getenv("BEEFTV_UI_BOOTSTRAP")) == "1"
 		// The UI bootstrap secret comes through the Wails binding, separately from entry credentials.
 		desktopShell := desktopTrust != nil && desktopTrust(c.Request)
-		if !ownerOK && !devBootstrap && !desktopShell {
+		// 服务端形态没有桌面壳：浏览器工作台自身的同源请求即工作区本机用户，
+		// 与 /api/ops 的 localBrowserUI 放行口径一致；来源已由上面的 isLoopbackRequest 校验。
+		localUI := desktopTrust == nil && browserSameOriginUI(c)
+		if !ownerOK && !devBootstrap && !desktopShell && !localUI {
 			fail(c, http.StatusForbidden, app.BadAuthRequest("签发内置 UI 会话需要 owner 凭据或显式本地引导"))
 			return
 		}
@@ -118,6 +121,6 @@ func RegisterAgentUISessionRoutes(r gin.IRouter, svc *app.Service, ui *uiSession
 			return
 		}
 		ok(c, gin.H{"token": session.Token, "expiresAt": session.ExpiresAt, "scope": "workspace:read-write",
-			"bootstrap": map[string]any{"ownerToken": ownerOK, "devBootstrap": devBootstrap, "desktopShell": desktopShell}})
+			"bootstrap": map[string]any{"ownerToken": ownerOK, "devBootstrap": devBootstrap, "desktopShell": desktopShell, "localUI": localUI}})
 	})
 }

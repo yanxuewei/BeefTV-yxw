@@ -120,10 +120,11 @@ curl -s -X POST http://127.0.0.1:8082/inference \
 | `BEEFTV_CLIENT_ID` / `BEEFTV_CLIENT_TOKEN` | 已登记客户端凭据：能力模式由服务端登记决定，不能自我提升 |
 | `BEEFTV_DESKTOP_TOKEN` | 仅供桌面管理操作（如登记客户端）通过入口守卫；不要交给外部 Agent |
 
-两条边界：
+身份边界：
 
 - 已登记的外部客户端只需自身凭据，即可访问同一个桌面工作区的 `/api/ops` 和 `/api/ops/:op`。它不能访问其他桌面 API、登记客户端或签发 UI 写会话。不要向外部 Agent 分发 owner 或桌面壳凭据。
 - 内置 UI 通过 Wails 绑定获得独立的短期引导凭据，再签发 UI 会话；单独出示桌面启动令牌不能取得助手写会话。
+- 服务端形态（`cmd/server`，没有桌面壳凭据）下，本机同源的浏览器请求按工作区本机用户处理：`POST /api/ops/:op` 记为 `caller=manual`，`POST /api/assistant/ui-session` 可直接签发。判定依据是回环来源加浏览器自带的 `Origin` 或 `Sec-Fetch-Site: same-origin`；不带这两个头的本机进程仍须 owner 凭据或已登记客户端。因此这条放行只适合本机自用，不要把前端端口暴露到局域网。
 - 客户端登记（`beeftv client register`）按合同需要 owner 凭据；桌面形态下同时需要桌面启动令牌。令牌值只在本机进程环境与本机 0600 文件里流转，不写入日志、不写进文档示例。
 
 面向脚本批量使用的完整命令、退出码与幂等约定见 [beeftv 命令行基础使用](beeftv-cli.mdx)。
