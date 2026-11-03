@@ -6,10 +6,15 @@ services:
       dockerfile: backend/Dockerfile
       args:
         GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
+    # /api/ops 与 /api/assistant/* 只接受 RemoteAddr 为回环的请求。桥接网络下 nginx 反代
+    # 来源是 172.x，助手状态与画布保存都会 403。本机自用改为 host 网络，与 web 共享宿主回环。
+    network_mode: host
     environment:
       CANVAS_LOCAL_MODE: "true"
-      # 容器内监听所有接口，供同一 Compose 网络中的 web 反代访问。宿主机不要对所有网卡发布 8080。
-      CANVAS_BACKEND_ADDR: ":8080"
+      # 只绑宿主回环，同网络命名空间的 web 反代仍可访问，局域网不可见。
+      CANVAS_BACKEND_ADDR: "127.0.0.1:8080"
+      # 浏览器形态没有桌面壳凭据，允许本机同源签发助手 UI 会话。只适合本机自用。
+      BEEFTV_UI_BOOTSTRAP: "1"
       CANVAS_BACKEND_DATA_DIR: /data
       CANVAS_SHUTDOWN_TIMEOUT: ${CANVAS_SHUTDOWN_TIMEOUT:-10m}
       CANVAS_DATABASE_DRIVER: ${CANVAS_DATABASE_DRIVER:-sqlite}
@@ -37,8 +42,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
+    # host 网络下端口映射被忽略，nginx 的 listen 3000 直接监听宿主。
+    network_mode: host
+    extra_hosts:
+      # nginx.conf 的 proxy_pass http://backend:8080 在 host 网络下指向本机回环。
+      - "backend:127.0.0.1"
     depends_on:
       backend:
         condition: service_healthy

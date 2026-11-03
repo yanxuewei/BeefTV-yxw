@@ -28,6 +28,7 @@ web/.next
 web/dist
 web/node_modules
 web/out
+agent-host/node_modules
 *.log
 *.db
 *.sqlite
